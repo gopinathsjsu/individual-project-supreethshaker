@@ -1,4 +1,4 @@
-package com.cmpe202.billing;
+package com.cmpe202.billing.Factory;
 
 import java.io.IOException;
 

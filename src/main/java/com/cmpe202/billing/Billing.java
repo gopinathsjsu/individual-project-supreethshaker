@@ -2,26 +2,40 @@ package com.cmpe202.billing;
 
 import java.io.*;
 import java.util.*;
+import com.cmpe202.billing.Factory.*;
+import com.cmpe202.billing.Strategy.*;
 
 public class Billing {
 	
 	private static OutputterFactory factory = new OutputterFactory();
+	private static HashMap<String, Integer> item_validations = new HashMap<String, Integer>();
+	static {
+		item_validations = new HashMap<String, Integer>();
+		item_validations.put("essentials", 3);
+		item_validations.put("luxury", 4);
+		item_validations.put("misc", 6);
+	}	
 	
+	
+	/**
+	 * @category STRATEGY PATTERN
+	 * the load_cards, load_items, and the load_orders methods all utilize
+	 * the Strategy pattern. The author was not very satisfied encoding all the
+	 * CSV traversals in different places, and hence, based on the use case,
+	 * trivial as it might be,
+	 * decided to encode the processing logic using the strategy pattern
+	 */
 	private static ArrayList<Cards>load_cards(String path_to_cards_file) throws Exception {
 		try {
 			ArrayList<Cards> cards = new ArrayList<Cards>();
-			File cards_input = new File(path_to_cards_file);
+			StrategyLoader loader = new StrategyLoader(new LoadCardsStrategy());
+			ArrayList<String []> card_csv_data = loader.load_data(path_to_cards_file);
 			
-			Scanner sc = new Scanner(cards_input);
-			sc.nextLine();
-			
-			while(sc.hasNextLine()) {
-				String[] line = sc.nextLine().split(",");
-				Cards new_card = new Cards(line[0]);
+			for(String[] csv_card: card_csv_data ) {
+				Cards new_card = new Cards(csv_card[0]);
 				cards.add(new_card);
 			};
 			
-			sc.close();
 			return cards;
 		} catch(FileNotFoundException ex) {
 			System.err.println("Cards File Not Found");
@@ -35,26 +49,19 @@ public class Billing {
 	private static ArrayList<Items>load_items(String path_to_items_file) throws Exception {
 		try {
 			ArrayList<Items> items_list = new ArrayList<Items>();
-			File input = new File(path_to_items_file);
+			StrategyLoader loader = new StrategyLoader(new LoadItemsStrategy());
+			ArrayList<String[]> items_csv_data = loader.load_data(path_to_items_file);
 			
-			Scanner sc = new Scanner(input);
-			sc.nextLine();
-			
-			while(sc.hasNextLine()) {
-				String line = sc.nextLine().replace("\"", "");
-                String[] lineData = line.split(",");
-                
+			for(String [] lineData: items_csv_data) {
 				Items item= new Items(
 						lineData[0].trim(),
 						lineData[1].trim(), 
 						Integer.parseInt(lineData[2].trim()), 
 						Double.parseDouble(lineData[3].trim())
-				);
-				
+				);	
 				items_list.add(item);
 			};
 			
-			sc.close();
 			return items_list;
 		} catch(FileNotFoundException ex) {
 			System.err.println("Inventory File Not Found");
@@ -70,13 +77,10 @@ public class Billing {
 			ArrayList<Orders> orders_list = new ArrayList<Orders>();
 			String card_number = "";
 			
-			File input = new File(path_to_orders_file);			
-			Scanner sc = new Scanner(input);
-			sc.nextLine();
+			StrategyLoader loader = new StrategyLoader(new LoadOrdersStrategy());
+			ArrayList<String []> orders_csv_data = loader.load_data(path_to_orders_file);
 			
-			while(sc.hasNextLine()) {
-                String line = sc.nextLine().replace("\"", "");
-                String[] line_data = line.split(",");
+			for (String[] line_data: orders_csv_data) {
                 
                 // If a card number is specified set that as the card
                 if (line_data.length >= 3) {
@@ -92,13 +96,12 @@ public class Billing {
             	orders_list.add(new_order);	
 			};
 			
-			sc.close();
 			return orders_list;
 		} catch(FileNotFoundException ex) {
 			System.err.println("Orders File Not Found");
 			throw ex;
 		} catch(Exception ex) {
-			System.err.println("Exception @ Loading Orders");
+			System.err.println("Exception @ Loading Orders" + ex.toString());
 			throw ex;
 		}
 	};
@@ -114,8 +117,12 @@ public class Billing {
 	
 	
 	/**
+	 * @category FACTORY pattern
 	 * The below 2 methods make use of the factory pattern as demonstrated
 	 * by OutputterFactory
+	 * The printing methods may be varied and each may have it's own design principle
+	 * The responsibility of the design and the file output is dictated by the caller, 
+	 * but the callee takes care of the specific output storage and input and output
 	 */
 	public static void update_card(String card_number) throws IOException{
         Outputter writer = factory.getOutput("FILE", "Cards.csv");
@@ -129,8 +136,8 @@ public class Billing {
 		String err_file_name = "errors.txt";
 		
 		Receipt receipt = (Receipt)factory.getOutput("RECEIPT", output_file_name);
-		
 		String heading = "Item,Quantity,Price,TotalPrice,\n";		
+		
 		receipt.output(
 				receipt.inject_amount_for_csv(heading, amount, line_items)
 		);
@@ -158,11 +165,6 @@ public class Billing {
 			double total = 0;
 			ArrayList<String> line_items = new ArrayList<String>();;
 			String err_text = "";
-			
-			HashMap<String, Integer> item_validations = new HashMap<String, Integer>();
-			item_validations.put("essentials", 3);
-			item_validations.put("luxury", 4);
-			item_validations.put("misc", 6);
 			
 			HashMap<String, Items> item_set = new HashMap<String, Items>();
 			for (Items item: items) {
