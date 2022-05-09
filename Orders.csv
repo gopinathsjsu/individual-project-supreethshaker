@@ -1,5 +1,5 @@
-Item,Quantity,CardNumber
-Shampoo,2,4.13E+12
-chocolates,5,
-Wallet,1,
-Pen,10,
+"Item","Quantity","Card number"
+"Shampoo","2","1234 5678 9101 1121"
+"Chocolates","4",
+"Wallet","1",
+"Pen","5",

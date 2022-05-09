@@ -1,6 +1,5 @@
-Amount
-120.0
-List of items
-Item: Shampoo, Quantity: 2, Price: 20.0, 
-Item: Wallet, Quantity: 1, Price: 100.0, 
-
+Item,Quantity,Price,TotalPrice,
+Shampoo,2,20,147.0,
+Chocolates,4,12,
+Wallet,1,100,
+Pen,5,15,

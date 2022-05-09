@@ -1,3 +1,1 @@
 Errors
-Incorrect quantity	Item: chocolates	Quantity: 5
-Incorrect quantity	Item: Pen	Quantity: 10

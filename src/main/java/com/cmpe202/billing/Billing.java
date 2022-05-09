@@ -4,13 +4,8 @@ import java.io.*;
 import java.util.*;
 
 public class Billing {
-    public static void update_card(String card_number) throws IOException{
-        FileWriter writer = new FileWriter("Cards.csv", true);
-        writer.append(card_number + ",");
-        writer.append("\n");
-        writer.flush();
-        writer.close();
-    }
+	
+	private static OutputterFactory factory = new OutputterFactory();
 	
 	private static ArrayList<Cards>load_cards(String path_to_cards_file) throws Exception {
 		try {
@@ -70,7 +65,6 @@ public class Billing {
 		}
 	};
 	
-	
 	private static ArrayList<Orders>load_orders(String path_to_orders_file) throws Exception {
 		try {
 			ArrayList<Orders> orders_list = new ArrayList<Orders>();
@@ -84,8 +78,8 @@ public class Billing {
                 String line = sc.nextLine().replace("\"", "");
                 String[] line_data = line.split(",");
                 
-                // Set the card_number
-                if (card_number.equals("")) {
+                // If a card number is specified set that as the card
+                if (line_data.length >= 3) {
                     card_number = line_data[2];
                 };
                 
@@ -115,54 +109,54 @@ public class Billing {
                 return true;
             }
         }
-
         return false;
     }
 	
 	
-	public static void display_bill(double amount, String bill, String errors) throws IOException {
+	/**
+	 * The below 2 methods make use of the factory pattern as demonstrated
+	 * by OutputterFactory
+	 */
+	public static void update_card(String card_number) throws IOException{
+        Outputter writer = factory.getOutput("FILE", "Cards.csv");
+        String input = card_number + ",\n";
+        writer.output(input);
+    }
+	
+	
+	public static void persist_bill_details(double amount, String errors, ArrayList<String> line_items) throws IOException {
 		String output_file_name = "output.csv";
 		String err_file_name = "errors.txt";
 		
-		FileWriter op_writer = new FileWriter(output_file_name);
-		FileWriter err_writer = new FileWriter(err_file_name);
+		Receipt receipt = (Receipt)factory.getOutput("RECEIPT", output_file_name);
 		
-		op_writer.append("Amount");
-		op_writer.append("\n");
-		op_writer.append("" + amount);
-		op_writer.append("\n");
-		op_writer.append("List of items");
-		op_writer.append("\n");
-		op_writer.append(bill);
-		op_writer.append("\n");
-		op_writer.flush();
-		op_writer.close();
+		String heading = "Item,Quantity,Price,TotalPrice,\n";		
+		receipt.output(
+				receipt.inject_amount_for_csv(heading, amount, line_items)
+		);
 		
-		if (!errors.equals("")) {
-			err_writer.append("Errors\n");
-			err_writer.append(errors);
-		}
-		err_writer.flush();
-		err_writer.close();
-		
-		
-		
-		
+		Outputter err_bill = factory.getOutput("ERROR_RECEIPT", err_file_name);
+		String err_msg= "Errors\n";
+		if (errors.length() > 0) err_msg += errors;
+		err_bill.output(err_msg);
 	};
 	
-	public static void main(String[] args) throws IOException {
+	public static void main(String[] args) {
 		 /**
 		  * Load CSV files
+		  * 
+		  * Orders: {Item, Quantity}, CardNumber
+		  * Items: {Item<essentials, luxury, misc>, Category, Quantity, Price }
 		  */
 		try {
-			System.out.println("Loading data\n");
+			System.out.println("Loading...");
 			ArrayList<Cards> cards = load_cards("./Cards.csv");
 			ArrayList<Items> items = load_items("./Items.csv");
 			ArrayList<Orders> orders = load_orders("./Orders.csv");
-			System.out.println("Data loading complete\n");
+			System.out.println("Loaded data successfully");
 			
 			double total = 0;
-			String line_item = "";
+			ArrayList<String> line_items = new ArrayList<String>();;
 			String err_text = "";
 			
 			HashMap<String, Integer> item_validations = new HashMap<String, Integer>();
@@ -170,38 +164,65 @@ public class Billing {
 			item_validations.put("luxury", 4);
 			item_validations.put("misc", 6);
 			
-			for(Orders order: orders) {
-				for(Items item: items) {
-					if (order.getItem().equalsIgnoreCase(item.getItem())) {
-						if (
-							item_validations.containsKey(item.getCategory().toLowerCase()) && 
-							item.getQuantity() >= order.getQuantity() && 
-							order.getQuantity() <= item_validations.get(item.getCategory().toLowerCase())
-						) {
-							double price = item.getPrice() * order.getQuantity();
-							total += price;
-							line_item += "Item: " + order.getItem()  +", " + "Quantity: " + order.getQuantity() +", "+ "Price: " + price +", " +"\n";
-							
-							if (!card_exists(cards, order.getCard())) {
-								update_card(order.getCard());
-							};
-						} else {
-							// Incorrect quantity
-							System.out.println("Incorrect quantity :: " + order + "\n" + item);
-							err_text += "Incorrect quantity\tItem: " + order.getItem() + "\tQuantity: " + order.getQuantity() + "\n";
-						};
-					};
-				}
+			HashMap<String, Items> item_set = new HashMap<String, Items>();
+			for (Items item: items) {
+				item_set.put(item.getItem().toLowerCase(), item);
 			};
+
+			System.out.println("Orders are being processed...\n");
+			for(Orders order: orders) {
+					
+				Items item = item_set.getOrDefault(order.getItem().toLowerCase(), null);
+				if (item == null) {
+					err_text += "Missing item\tOrder = " + order.getItem() + "\n";
+					System.out.println("Missing item\tOrder = " + order.getItem() + "\n");
+					continue;
+				};
+				
+				if (order.getQuantity() > item.getQuantity()) {
+					err_text += "Not enough inventory\tOrder = " + order.getItem() + "\tRequested vs Available = " + order.getQuantity() + "\t" + item.getQuantity() + "\n";
+					System.out.println("Not enough inventory\tOrder = " + order.getItem() + "\nRequested vs Available = " + order.getQuantity() + "\t" + item.getQuantity() + "\n");
+					continue;
+				};
+				
+				Integer quantity_limit = item_validations.getOrDefault(item.getCategory().toLowerCase(), null);
+				if (quantity_limit == null) {
+					err_text += "Invalid category\tItem = " + item.getCategory() + "\n";
+					System.out.println("Invalid category\tItem = " + item.getCategory() + "\n");
+					continue;
+				};
+				
+				if (order.getQuantity() > quantity_limit) {
+					err_text += "Incorrect quantity\tItem: " + order.getItem() + "\tQuantity: " + order.getQuantity() + "\n";
+					System.out.println("Incorrect quantity\tItem: " + order.getItem() + "\tQuantity: " + order.getQuantity() + "\n");
+					continue;
+				};
+				
+				double price = item.getPrice() * order.getQuantity();
+				total += price;
+				line_items.add(order.getItem() + "," + (int) order.getQuantity() + "," + (int) price + ",\n");
+				System.out.println("Valid order for " + (int) price + ".\t Total = " + total);
+				
+				// Add a card from a valid order if not encountered
+				if (!card_exists(cards, order.getCard())) {
+					cards.add(new Cards(order.getCard()));
+					update_card(order.getCard());
+				};
+			}
 			
-			display_bill(total, line_item, err_text);
-			System.out.println("\n\nGoodnight Sweet Prince");
+			System.out.println("\nOrders processed. Generating receipt...\n");
+			persist_bill_details(total, err_text, line_items);
+			System.out.println("=========================================");
+			System.out.println("\t\tSuccess\t\t\t|");
+			System.out.println("=========================================");
+			System.exit(0);
 			
-			
+		} catch(IOException ex) {
+			System.err.println("Error handling files" + ex.toString());
+			System.exit(0);
 		} catch(Exception ex) {
 			System.err.println("Exception @ Main = " + ex.toString());
+			System.exit(0);
 		};
-		
-		
 	};
 };
