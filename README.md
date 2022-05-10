@@ -16,3 +16,7 @@
 * The project utilizes two design patterns
 * `Factory pattern` is used for writing different content to different output. An `Outputter` interface defines the writing operations whereas the classes implementing this interface extend the functionality. An `OutputterFactory` class creates new instances of the output methods based on the context provided by client
 * `Strategy pattern` is used for handling the different processing needs of each .CSV file while being processed. Based on the file, there is a different strategy used, and this decouples the loading functionality based on strategy and how it is consumed downstream
+
+<p float="left">
+  <img src="uml.png"/>
+</p>
